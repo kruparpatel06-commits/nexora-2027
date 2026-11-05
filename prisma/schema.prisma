@@ -1,0 +1,286 @@
+// NEXORA 2027 - Database Schema
+// Neon Serverless PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  REGISTRATION_MANAGER
+  CHECKIN_STAFF
+  AGENDA_MANAGER
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+  WAITLISTED
+}
+
+enum SpeakerStatus {
+  PROPOSED
+  INVITED
+  CONFIRMED
+  DECLINED
+}
+
+enum TicketCategory {
+  EARLY_BIRD_STUDENT
+  REGULAR_STUDENT
+  PROFESSIONAL
+  SINGLE_DAY_STUDENT
+  COMPETITION_TEAM
+}
+
+enum CheckInDay {
+  DAY_1
+  DAY_2
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+  BOUNCED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  role          Role     @default(CHECKIN_STAFF)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  checkIns      CheckIn[]
+  auditLogs     AuditLog[]
+  emailLogs     EmailLog[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model EventSettings {
+  id                    String   @id @default(cuid())
+  eventName             String   @default("NEXORA 2027 — The Future of Business Conference")
+  tagline               String   @default("Think Beyond Today. Lead What's Next.")
+  startDate             DateTime @default(dbgenerated("'2027-01-14'::timestamp"))
+  endDate               DateTime @default(dbgenerated("'2027-01-15'::timestamp"))
+  venueName             String   @default("JNMC, Belagavi, Karnataka")
+  venueDetails          String?
+  venueMapUrl           String?
+  contactEmail          String   @default("krupapatel@klecbalc.edu.in")
+  contactPhone          String   @default("9845677868")
+  registrationOpen      Boolean  @default(true)
+  registrationCloseDate DateTime?
+  maxAttendees          Int      @default(1200)
+  logoUrl               String?
+  bannerUrl             String?
+  aboutContent          String?
+  privacyPolicy         String?
+  termsOfService        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model TicketType {
+  id              String         @id @default(cuid())
+  name            String
+  category        TicketCategory
+  description     String?
+  priceInPaise    Int
+  currency        String         @default("INR")
+  inclusions      String[]
+  maxQuantity     Int?
+  soldCount       Int            @default(0)
+  isActive        Boolean        @default(true)
+  isEarlyBird     Boolean        @default(false)
+  earlyBirdEndsAt DateTime?
+  validDays       String[]
+  sortOrder       Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  registrations   Registration[]
+
+  @@index([isActive])
+  @@index([category])
+}
+
+model Speaker {
+  id              String        @id @default(cuid())
+  name            String
+  title           String?
+  organization    String?
+  bio             String?
+  photoUrl        String?
+  sessionTopic    String?
+  socialLink      String?
+  status          SpeakerStatus @default(PROPOSED)
+  sortOrder       Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  sessions        Session[]
+
+  @@index([status])
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  day         Int
+  startTime   String
+  endTime     String
+  room        String?
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(false)
+  speakerId   String?
+  speaker     Speaker? @relation(fields: [speakerId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([day])
+  @@index([isPublished])
+}
+
+model Registration {
+  id                String             @id @default(cuid())
+  registrationId    String             @unique
+  ticketNumber      String             @unique
+  fullName          String
+  email             String
+  mobile            String
+  collegeOrg        String?
+  designation       String?
+  city              String?
+  ticketTypeId      String
+  ticketType        TicketType         @relation(fields: [ticketTypeId], references: [id])
+  status            RegistrationStatus @default(PENDING)
+  selectedDay       String?
+  consentPrivacy    Boolean            @default(false)
+  consentComms      Boolean            @default(false)
+  qrToken           String             @unique
+  teamName          String?
+  teamSize          Int?
+  notes             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  checkIns          CheckIn[]
+  emailLogs         EmailLog[]
+
+  @@unique([email])
+  @@index([status])
+  @@index([registrationId])
+  @@index([ticketNumber])
+  @@index([qrToken])
+  @@index([createdAt])
+}
+
+model CheckIn {
+  id             String      @id @default(cuid())
+  registrationId String
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  day            CheckInDay
+  checkedInAt    DateTime    @default(now())
+  staffId        String?
+  staff          User?       @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  notes          String?
+
+  @@unique([registrationId, day])
+  @@index([day])
+  @@index([checkedInAt])
+}
+
+model Sponsor {
+  id              String   @id @default(cuid())
+  name            String
+  logoUrl         String?
+  websiteUrl      String?
+  tier            String?
+  contactPerson   String?
+  contactEmail    String?
+  contactPhone    String?
+  contribution    String?
+  benefits        String?
+  isPublished     Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isPublished])
+}
+
+model SponsorEnquiry {
+  id              String   @id @default(cuid())
+  organization    String
+  contactPerson   String
+  email           String
+  phone           String?
+  interestedTier  String?
+  contributionType String?
+  budgetRange     String?
+  message         String?
+  status          String   @default("NEW")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  subject     String
+  htmlBody    String
+  textBody    String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model EmailLog {
+  id             String      @id @default(cuid())
+  templateName   String?
+  recipientEmail String
+  subject        String
+  status         EmailStatus @default(PENDING)
+  providerId     String?
+  errorMessage   String?
+  registrationId String?
+  registration   Registration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
+  sentById       String?
+  sentBy         User?       @relation(fields: [sentById], references: [id], onDelete: SetNull)
+  createdAt      DateTime    @default(now())
+
+  @@index([recipientEmail])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String?
+  entityId   String?
+  details    Json?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
